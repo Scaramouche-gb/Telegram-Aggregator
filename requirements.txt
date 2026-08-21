@@ -1,0 +1,4 @@
+aiogram
+telethon
+dotenv
+loguru
