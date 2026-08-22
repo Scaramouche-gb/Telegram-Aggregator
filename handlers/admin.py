@@ -14,7 +14,7 @@ async def cmd_start(message: Message):
             f"Список команд для администратора:\n\n"
             f"/start - список команд\n"
             f"/showsettings - показать количество каналов в агрегаторе \n"
-            f"/replymode - переключить статус пересылки on/off"
+            f"/replymode - переключить статус пересылки on/off \n"
             f"/addsource (ссылка, юзернейм или id канала) (количество дней) - добавить канал \n"
             f"/removesource (ссылка, юзернейм или id канала) - удалить канал \n"
             f"/ignore - открывает список игнор слов"
@@ -35,7 +35,9 @@ async def show_settings(message: Message):
             
             for src in sources:
                 channel = src.get("channel")
+                title = src.get("title")
                 date_str = src.get("end_date", "Бессрочно")
+                display_name = f"<b>{title}</b> (<code>{channel}</code>)" if title else f"<b>{channel}</b>"
 
                 if date_str and date_str != "Бессрочно":
                     try:
@@ -49,7 +51,7 @@ async def show_settings(message: Message):
                     date_display = "Бессрочно"
                 
                 sources_list.append(
-                    f'<tg-emoji emoji-id="5474359500095890971">🔹</tg-emoji> <b>{channel}</b> -- {date_display}'
+                    f'<tg-emoji emoji-id="5474359500095890971">🔹</tg-emoji> {display_name} -- {date_display}'
                 )
             sources_text = "\n".join(sources_list)
 

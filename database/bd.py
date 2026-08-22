@@ -35,10 +35,14 @@ class Database:
         data = self._load()
         return data.get("sources", [])
     
-    def add_source(self, channel: str, days: int):
+    def add_source(self, channel: str, days: int, title: str = ""):
         data = self._load()
         end_date = (datetime.now() + timedelta(days=days)).strftime("%d.%m.%Y %H:%M")
-        data["sources"].append({"channel": channel, "end_date": end_date})
+        data["sources"].append({
+            "channel": channel,
+            "title": title,
+            "end_date": end_date
+            })
         self._save(data)
     
     def remove_source(self, channel: str):

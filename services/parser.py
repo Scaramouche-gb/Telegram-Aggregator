@@ -82,13 +82,23 @@ async def check_and_subscribe(channel: str):
             entity_to_join = clear_channel
 
         try:
-            await client.get_entity(entity_to_join)
+            entity = await client.get_entity(entity_to_join)
         except Exception:
-            await client(JoinChannelRequest(entity_to_join))
+            entity = await client(JoinChannelRequest(entity_to_join))
             log.info(f"Успешная подписка на канал: {channel}")
-            return
-        
-        log.info(f"Канал уже доступен: {channel}")
+            
+        title = getattr(entity, 'title', '')
+        if title:
+            sources = db.get_sources()
+            for src in sources:
+                if src.get("channel") == channel and not src.get("title"):
+                    src["title"] = title
+                    data = db._load()
+                    data["sources"] = sources
+                    db._save(data)
+                    break
+
+        log.info(f"Канал уже доступен: {title or channel}")
     except Exception as e:
         log.error(f"Ошибка при подписке на {channel}: {e}")
 
