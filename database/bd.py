@@ -35,7 +35,7 @@ class Database:
         data = self._load()
         return data.get("sources", [])
     
-    def add_source(self, channel: str, days: int, title: str = ""):
+    def add_source(self, channel: str, days: int = None, title: str = ""):
         data = self._load()
         if days:
             end_date = (datetime.now() + timedelta(days=days)).strftime("%d.%m.%Y %H:%M")

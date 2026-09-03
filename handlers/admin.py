@@ -67,8 +67,8 @@ async def show_settings(message: Message):
 async def add_source(message: Message):
     if str(message.from_user.id) == settings.admin_id:
         args = message.text.split(maxsplit=2)
-        if len(args) < 3:
-            await message.answer("Пожалуйста, укажите ссылку на канал и количество дней.")
+        if len(args) < 2:
+            await message.answer("Пожалуйста, укажите ссылку/юзернейм на канал.")
             return
 
         channel = args[1]
