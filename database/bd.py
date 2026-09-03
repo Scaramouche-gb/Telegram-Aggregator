@@ -37,7 +37,11 @@ class Database:
     
     def add_source(self, channel: str, days: int, title: str = ""):
         data = self._load()
-        end_date = (datetime.now() + timedelta(days=days)).strftime("%d.%m.%Y %H:%M")
+        if days:
+            end_date = (datetime.now() + timedelta(days=days)).strftime("%d.%m.%Y %H:%M")
+        else:
+            end_date = "Бессрочно"
+            
         data["sources"].append({
             "channel": channel,
             "title": title,

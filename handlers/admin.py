@@ -72,14 +72,21 @@ async def add_source(message: Message):
             return
 
         channel = args[1]
-        try:
-            end_date = int(args[2])
-        except ValueError:
-            await message.answer("Количество дней должно быть числом.")
-            return
+        days = None
+        
+        if len(args) == 3:
+            try:
+                days = int(args[2])
+            except ValueError:
+                await message.answer("Количество дней должно быть числом.")
+                return
 
-        db.add_source(channel, end_date)
-        await message.answer(f"Канал {channel} добавлен в агрегатор на {end_date} дней.")
+        db.add_source(channel, days)
+
+        if days:
+            await message.answer(f"Канал {channel} добавлен в агрегатор на {days} дней.")
+        else:
+            await message.answer(f"Канал {channel} добавлен в агрегатор <b>бессрочно</b>.")
 
 @router.message(Command("removesource"))
 async def remove_source(message: Message):
