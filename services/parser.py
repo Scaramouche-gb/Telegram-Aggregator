@@ -89,14 +89,7 @@ async def check_and_subscribe(channel: str):
             
         title = getattr(entity, 'title', '')
         if title:
-            sources = db.get_sources()
-            for src in sources:
-                if src.get("channel") == channel and not src.get("title"):
-                    src["title"] = title
-                    data = db._load()
-                    data["sources"] = sources
-                    db._save(data)
-                    break
+            db.update_source_title(channel, title)
 
         log.info(f"Канал уже доступен: {title or channel}")
     except Exception as e:
@@ -115,6 +108,9 @@ async def sync_sources_task():
                 channel = src.get("channel")
                 date_str = src.get("end_date")
                 notified = src.get("notified", False)
+
+                if not src.get("title") and channel:
+                    await check_and_subscribe(channel)
 
                 if date_str and date_str != "Бессрочно":
                     try:

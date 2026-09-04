@@ -48,6 +48,17 @@ class Database:
             "end_date": end_date
             })
         self._save(data)
+
+    def update_source_title(self, channel: str, title: str):
+        data = self._load()
+        updated = False
+        for src in data.get("sources", []):
+            if src["channel"] == channel:
+                src["title"] = title
+                updated = True
+                break
+        if updated:
+            self._save(data)
     
     def remove_source(self, channel: str):
         data = self._load()
