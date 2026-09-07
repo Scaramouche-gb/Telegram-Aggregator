@@ -43,12 +43,19 @@ async def start_bot():
     finally:
         await bot.session.close()
 
+sync_task_started = False
+
 async def start_userbot():
+    global sync_task_started
     log.info("Запуск Telethon Юзербота...")
     if not userbot_client.is_connected():
         await userbot_client.start()
+        log.info("[Telethon] Соединение установлено")
     
-    asyncio.create_task(sync_sources_task())
+    if not sync_task_started:
+        asyncio.create_task(sync_sources_task())
+        sync_task_started = True
+
     await userbot_client.run_until_disconnected()
 
 async def main():

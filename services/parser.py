@@ -25,8 +25,9 @@ client = TelegramClient(
     )
 
 album_buffers = {}
-processed_grouped_ids = set()
-processed_msg_ids = set()
+processed_grouped_ids = {}  # gid -> timestamp
+processed_msg_ids = {}      # (chat_id, msg_id) -> timestamp
+parser_lock = asyncio.Lock()
 
 @client.on(events.NewMessage)
 async def handle_new_message(event):
@@ -45,44 +46,41 @@ async def handle_new_message(event):
     
     if not is_source:
         return
+
+    now_ts = asyncio.get_event_loop().time()
         
     try:
         text = event.text or ""
 
+        # 1. АЛЬБОМЫ
         if event.grouped_id:
             gid = event.grouped_id
-            # Если этот альбом уже был полностью обработан и отправлен - пропускаем дубли
-            if gid in processed_grouped_ids:
-                return
+            
+            async with parser_lock:
+                # Если альбом уже отправлен недавно (в пределах 60 сек) - игнорируем
+                if gid in processed_grouped_ids:
+                    return
 
-            if gid not in album_buffers:
-                album_buffers[gid] = [event]
-                await asyncio.sleep(2.0)
-
-                events_list = album_buffers.pop(gid, [])
-                if events_list and gid not in processed_grouped_ids:
-                    processed_grouped_ids.add(gid)
-                    # Ограничиваем размер кэша
-                    if len(processed_grouped_ids) > 500:
-                        processed_grouped_ids.pop()
-
-                    first_event = events_list[0]
-                    channel_name = first_event.chat.title if first_event.chat else first_event.chat_id
-                    log.info(f"Отправляем альбом (ID: {first_event.id}-{events_list[-1].id}) из канала {channel_name}")
-
-                    msg_objects = [e.message for e in events_list]
-                    await client.forward_messages(settings.bot_username, msg_objects)
-            else:
-                album_buffers[gid].append(event)
+                if gid not in album_buffers:
+                    album_buffers[gid] = [event]
+                    # Запускаем сбор группы в отдельном таске, чтобы не блокировать обработчик
+                    asyncio.create_task(process_album(gid))
+                else:
+                    album_buffers[gid].append(event)
             return
 
-        # Дедупликация одиночных сообщений
+        # 2. ОДИНОЧНЫЕ СООБЩЕНИЯ
         unique_key = (chat_id, event.id)
-        if unique_key in processed_msg_ids:
-            return
-        processed_msg_ids.add(unique_key)
-        if len(processed_msg_ids) > 1000:
-            processed_msg_ids.pop()
+        async with parser_lock:
+            if unique_key in processed_msg_ids and (now_ts - processed_msg_ids[unique_key]) < 60:
+                return
+            processed_msg_ids[unique_key] = now_ts
+
+            # Очистка старых ключей (старше 300 сек)
+            if len(processed_msg_ids) > 1000:
+                expired = [k for k, t in processed_msg_ids.items() if now_ts - t > 300]
+                for k in expired:
+                    del processed_msg_ids[k]
 
         channel_name = event.chat.title if event.chat else event.chat_id
         log.info(f"Отправляем одиночный пост (ID: {event.id}) из канала {channel_name}")
@@ -90,6 +88,35 @@ async def handle_new_message(event):
 
     except Exception as e:
         log.error(f"Ошибка при обработке/пересылке сообщения: {e}")
+
+async def process_album(gid):
+    """Фоновый сборщик альбома с жесткой дедупликацией"""
+    await asyncio.sleep(2.5)
+    async with parser_lock:
+        if gid in processed_grouped_ids:
+            album_buffers.pop(gid, None)
+            return
+
+        events_list = album_buffers.pop(gid, [])
+        if not events_list:
+            return
+
+        processed_grouped_ids[gid] = asyncio.get_event_loop().time()
+        if len(processed_grouped_ids) > 500:
+            now_ts = asyncio.get_event_loop().time()
+            expired = [g for g, t in processed_grouped_ids.items() if now_ts - t > 300]
+            for g in expired:
+                del processed_grouped_ids[g]
+
+    try:
+        first_event = events_list[0]
+        channel_name = first_event.chat.title if first_event.chat else first_event.chat_id
+        log.info(f"Отправляем альбом (ID: {first_event.id}-{events_list[-1].id}) из канала {channel_name}")
+
+        msg_objects = [e.message for e in events_list]
+        await client.forward_messages(settings.bot_username, msg_objects)
+    except Exception as e:
+        log.error(f"Ошибка при отправке альбома {gid}: {e}")
 
 
 async def check_and_subscribe(channel: str):
