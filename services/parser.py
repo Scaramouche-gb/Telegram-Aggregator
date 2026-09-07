@@ -25,6 +25,8 @@ client = TelegramClient(
     )
 
 album_buffers = {}
+processed_grouped_ids = set()
+processed_msg_ids = set()
 
 @client.on(events.NewMessage)
 async def handle_new_message(event):
@@ -49,12 +51,21 @@ async def handle_new_message(event):
 
         if event.grouped_id:
             gid = event.grouped_id
+            # Если этот альбом уже был полностью обработан и отправлен - пропускаем дубли
+            if gid in processed_grouped_ids:
+                return
+
             if gid not in album_buffers:
                 album_buffers[gid] = [event]
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(2.0)
 
                 events_list = album_buffers.pop(gid, [])
-                if events_list:
+                if events_list and gid not in processed_grouped_ids:
+                    processed_grouped_ids.add(gid)
+                    # Ограничиваем размер кэша
+                    if len(processed_grouped_ids) > 500:
+                        processed_grouped_ids.pop()
+
                     first_event = events_list[0]
                     channel_name = first_event.chat.title if first_event.chat else first_event.chat_id
                     log.info(f"Отправляем альбом (ID: {first_event.id}-{events_list[-1].id}) из канала {channel_name}")
@@ -64,6 +75,14 @@ async def handle_new_message(event):
             else:
                 album_buffers[gid].append(event)
             return
+
+        # Дедупликация одиночных сообщений
+        unique_key = (chat_id, event.id)
+        if unique_key in processed_msg_ids:
+            return
+        processed_msg_ids.add(unique_key)
+        if len(processed_msg_ids) > 1000:
+            processed_msg_ids.pop()
 
         channel_name = event.chat.title if event.chat else event.chat_id
         log.info(f"Отправляем одиночный пост (ID: {event.id}) из канала {channel_name}")
