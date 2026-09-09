@@ -6,10 +6,8 @@ from datetime import datetime, timedelta
 from config import settings
 from database.bd import db
 from database.logging import log
-from aiogram import Bot
 
 session_dir = "database/session"
-system_bot = Bot(token=settings.bot_token)
 os.makedirs(session_dir, exist_ok=True)
 session_path = os.path.join(session_dir, "userbot")
 
@@ -90,7 +88,6 @@ async def handle_new_message(event):
         log.error(f"Ошибка при обработке/пересылке сообщения: {e}")
 
 async def process_album(gid):
-    """Фоновый сборщик альбома с жесткой дедупликацией"""
     await asyncio.sleep(2.5)
     async with parser_lock:
         if gid in processed_grouped_ids:
@@ -166,12 +163,13 @@ async def sync_sources_task():
                             db.remove_source(channel)
 
                             try:
-                                await system_bot.send_message(
-                                    chat_id=settings.admin_id,
-                                    text=f"⚠️<b>Подписка истекла!</b>\nКанал <code>{channel}</code> был автоматически удален из агрегатора."
+                                await client.send_message(
+                                    'me',
+                                    f"⚠️ **Подписка истекла!**\nКанал `{channel}` был автоматически удален из агрегатора.",
+                                    parse_mode='md'
                                 )
                             except Exception as e:
-                                log.error(f"Не удалось отправить сообщение в ЛС: {e}")
+                                log.error(f"Не удалось отправить сообщение в Избранное: {e}")
                             continue
                         
                         time_left = expire_dt - now
@@ -180,14 +178,16 @@ async def sync_sources_task():
                             src["notified"] = True
                             db_updated = True
 
+                            hours_left = int(time_left.total_seconds() // 3600)
                             try:
-                                await system_bot.send_message(
-                                    chat_id=settings.admin_id,
-                                    text=f"⏳ <b>Предупреждение о подписке!</b>\n"
-                                         f"У канала <b>{channel}</b> подписка заканчивается через <b>{time_left.seconds // 3600} ч.</b> (до {date_str})."
+                                await client.send_message(
+                                    'me',
+                                    f"⏳ **Предупреждение о подписке!**\n"
+                                    f"У канала **{channel}** подписка заканчивается через **{hours_left} ч.** (до {date_str}).",
+                                    parse_mode='md'
                                 )
                             except Exception as e:
-                                log.error(f"Не удалось отправить предупреждение админу: {e}")
+                                log.error(f"Не удалось отправить предупреждение в Избранное: {e}")
 
                     except ValueError:
                         pass
