@@ -1,4 +1,5 @@
 import asyncio
+import html
 from aiogram import Router, Bot
 from aiogram.types import Message
 from database.bd import db
@@ -23,7 +24,7 @@ async def forward_to_target(message: Message, bot: Bot):
     for word in db.get_ignore_words():
         if word.lower() in content_text.lower():
             log.info(f"Сообщение {message.message_id} заблокировано (стоп слово '{word}')")
-            await message.reply(f"<b>Сообщение не переслано</b>\n\nНайдено стоп слово '{word}'", parse_mode="HTML")
+            await message.reply(f"<b>Сообщение не переслано</b>\n\nНайдено стоп слово '{html.escape(word)}'", parse_mode="HTML")
             return
 
     target = db.get_target_channel()

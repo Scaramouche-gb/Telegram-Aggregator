@@ -42,27 +42,36 @@ class Database:
         else:
             end_date = "Бессрочно"
             
-        data["sources"].append({
+        sources = data.setdefault("sources", [])
+        for src in sources:
+            if src.get("channel") == channel:
+                src["end_date"] = end_date
+                if title:
+                    src["title"] = title
+                src["notified"] = False
+                self._save(data)
+                return
+
+        sources.append({
             "channel": channel,
             "title": title,
             "end_date": end_date
-            })
+        })
         self._save(data)
 
     def update_source_title(self, channel: str, title: str):
         data = self._load()
         updated = False
         for src in data.get("sources", []):
-            if src["channel"] == channel:
+            if src.get("channel") == channel:
                 src["title"] = title
                 updated = True
-                break
         if updated:
             self._save(data)
     
     def remove_source(self, channel: str):
         data = self._load()
-        data["sources"] = [s for s in data.get("sources", []) if s["channel"] != channel]
+        data["sources"] = [s for s in data.get("sources", []) if s.get("channel") != channel]
         self._save(data)
 
 

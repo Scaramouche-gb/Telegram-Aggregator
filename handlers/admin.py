@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 from aiogram import Router
 from aiogram.types import Message
@@ -27,41 +28,60 @@ async def show_settings(message: Message):
         target = db.get_target_channel() or "Не установлен"
         reply_mode = "Включён" if db.get_reply_mode() else "Выключен"
 
-        if not sources:
-            sources_text = "<i>Каналы не добавлены</i>"
-        else:
-            sources_list = []
-            now = datetime.now()
-            
-            for src in sources:
-                channel = src.get("channel")
-                title = src.get("title")
-                date_str = src.get("end_date", "Бессрочно")
-                display_name = f"<b>{title}</b> (<code>{channel}</code>)" if title else f"<b>{channel}</b>"
-
-                if date_str and date_str != "Бессрочно":
-                    try:
-                        expire_dt = datetime.strptime(date_str, "%d.%m.%Y %H:%M")
-                        days_left = (expire_dt - now).days
-                        left_str = f"({days_left} дн.)" if days_left > 0 else "(менее 1 дн.)"
-                        date_display = f"до {date_str} {left_str}"
-                    except ValueError:
-                        date_display = f"до {date_str}"
-                else:
-                    date_display = "Бессрочно"
-                
-                sources_list.append(
-                    f'<tg-emoji emoji-id="5474359500095890971">🔹</tg-emoji> {display_name} -- {date_display}'
-                )
-            sources_text = "\n".join(sources_list)
-
-        await message.answer(
+        header = (
             f"<b>Настройки агрегатора</b>\n\n"
-            f"<b>Целевой канал:</b> {target}\n\n"
-            f"<b>Режим пересылки:</b> {reply_mode}\n\n"
+            f"<b>Целевой канал:</b> {html.escape(str(target))}\n\n"
+            f"<b>Режим пересылки:</b> {html.escape(str(reply_mode))}\n\n"
             f"<b>Количество каналов в агрегаторе: {len(sources)}</b>\n\n"
-            f"{sources_text}"
         )
+
+        if not sources:
+            await message.answer(header + "<i>Каналы не добавлены</i>")
+            return
+
+        sources_list = []
+        now = datetime.now()
+        
+        for src in sources:
+            channel = src.get("channel") or ""
+            title = src.get("title") or ""
+            date_str = src.get("end_date", "Бессрочно")
+            
+            esc_channel = html.escape(str(channel))
+            esc_title = html.escape(str(title))
+            display_name = f"<b>{esc_title}</b> (<code>{esc_channel}</code>)" if title else f"<b>{esc_channel}</b>"
+
+            if date_str and date_str != "Бессрочно":
+                try:
+                    expire_dt = datetime.strptime(date_str, "%d.%m.%Y %H:%M")
+                    days_left = (expire_dt - now).days
+                    left_str = f"({days_left} дн.)" if days_left > 0 else "(менее 1 дн.)"
+                    date_display = f"до {html.escape(date_str)} {left_str}"
+                except ValueError:
+                    date_display = f"до {html.escape(date_str)}"
+            else:
+                date_display = "Бессрочно"
+            
+            sources_list.append(
+                f'<tg-emoji emoji-id="5474359500095890971">🔹</tg-emoji> {display_name} -- {date_display}'
+            )
+
+        # Разбиваем на части, если сообщение длиннее лимита Telegram (4096 символов)
+        messages_to_send = []
+        current_chunk = header
+
+        for item in sources_list:
+            if len(current_chunk) + len(item) + 1 > 3800:
+                messages_to_send.append(current_chunk.strip())
+                current_chunk = item + "\n"
+            else:
+                current_chunk += item + "\n"
+
+        if current_chunk.strip():
+            messages_to_send.append(current_chunk.strip())
+
+        for msg_text in messages_to_send:
+            await message.answer(msg_text)
 
 @router.message(Command("addsource"))
 async def add_source(message: Message):
@@ -83,10 +103,11 @@ async def add_source(message: Message):
 
         db.add_source(channel, days)
 
+        esc_channel = html.escape(channel)
         if days:
-            await message.answer(f"Канал {channel} добавлен в агрегатор на {days} дней.")
+            await message.answer(f"Канал {esc_channel} добавлен в агрегатор на {days} дней.")
         else:
-            await message.answer(f"Канал {channel} добавлен в агрегатор <b>бессрочно</b>.")
+            await message.answer(f"Канал {esc_channel} добавлен в агрегатор <b>бессрочно</b>.")
 
 @router.message(Command("removesource"))
 async def remove_source(message: Message):
@@ -98,7 +119,7 @@ async def remove_source(message: Message):
 
         channel = args[1]
         db.remove_source(channel)
-        await message.answer(f"Канал {channel} удален из агрегатора.")
+        await message.answer(f"Канал {html.escape(channel)} удален из агрегатора.")
 
 @router.message(Command("ignore"))
 async def ignore_words(message: Message):
@@ -108,7 +129,7 @@ async def ignore_words(message: Message):
             await message.answer("Список игнор слов пуст.")
             return
 
-        ignore_list = "\n".join(ignore_words)
+        ignore_list = "\n".join(html.escape(w) for w in ignore_words)
         await message.answer(f"<b>Список игнор слов:</b>\n\n{ignore_list}")
 
 @router.message(Command("settarget"))
@@ -127,7 +148,7 @@ async def set_target_channel(message: Message):
             channel = raw_channel
 
         db.set_target_channel(channel)
-        await message.answer(f"Канал {channel} установлен как целевой канал для пересылки.")
+        await message.answer(f"Канал {html.escape(str(channel))} установлен как целевой канал для пересылки.")
 
 @router.message(Command("replymode"))
 async def reply_mode(message: Message):

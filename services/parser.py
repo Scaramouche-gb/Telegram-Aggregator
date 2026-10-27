@@ -116,6 +116,8 @@ async def process_album(gid):
         log.error(f"Ошибка при отправке альбома {gid}: {e}")
 
 
+failed_sources = {}  # channel -> timestamp
+
 async def check_and_subscribe(channel: str):
     try:
         clear_channel = channel.lstrip('@')
@@ -135,8 +137,10 @@ async def check_and_subscribe(channel: str):
             db.update_source_title(channel, title)
 
         log.info(f"Канал уже доступен: {title or channel}")
+        return True
     except Exception as e:
         log.error(f"Ошибка при подписке на {channel}: {e}")
+        return False
 
 async def sync_sources_task():
     global active_sources
@@ -144,6 +148,7 @@ async def sync_sources_task():
         try:
             sources = db.get_sources()
             now = datetime.now()
+            loop_time = asyncio.get_event_loop().time()
             current_sources = set()
             db_updated = False
 
@@ -153,7 +158,13 @@ async def sync_sources_task():
                 notified = src.get("notified", False)
 
                 if not src.get("title") and channel:
-                    await check_and_subscribe(channel)
+                    last_fail = failed_sources.get(channel, 0)
+                    if loop_time - last_fail >= 1800:
+                        success = await check_and_subscribe(channel)
+                        if not success:
+                            failed_sources[channel] = loop_time
+                        else:
+                            failed_sources.pop(channel, None)
 
                 if date_str and date_str != "Бессрочно":
                     try:
@@ -161,6 +172,7 @@ async def sync_sources_task():
                         if now >= expire_dt:
                             log.warning(f"Срок подписки канала {channel} Истёк, удаляем")
                             db.remove_source(channel)
+                            failed_sources.pop(channel, None)
 
                             try:
                                 await client.send_message(
@@ -203,7 +215,13 @@ async def sync_sources_task():
 
             for channel in new_channels:
                 if channel:
-                    await check_and_subscribe(channel)
+                    last_fail = failed_sources.get(channel, 0)
+                    if loop_time - last_fail >= 1800:
+                        success = await check_and_subscribe(channel)
+                        if not success:
+                            failed_sources[channel] = loop_time
+                        else:
+                            failed_sources.pop(channel, None)
 
         except Exception as e:
             log.error(f"Ошибка в цикле синхронизации источников: {e}")

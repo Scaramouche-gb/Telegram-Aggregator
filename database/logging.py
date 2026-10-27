@@ -12,7 +12,7 @@ logger.add(
 
 logger.add(
         "app.log",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}\n{exception}",
         level="INFO",
         encoding="utf-8",
         rotation="5 MB",
